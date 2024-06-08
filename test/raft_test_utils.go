@@ -79,7 +79,7 @@ func InitBlockStores(blockStoreAddrs []string) []*exec.Cmd {
 	blockCmdList := make([]*exec.Cmd, 0)
 	for _, addr := range blockStoreAddrs {
 		port := strings.Split(addr, ":")[1]
-		blockCmd := exec.Command("_bin/SurfstoreServerExec", "-s", "block", "-p", port, "-l")
+		blockCmd := exec.Command("_bin/SurfstoreServerExec", "-d", "-s", "block", "-p", port, "-l")
 		blockCmd.Stderr = os.Stderr
 		blockCmd.Stdout = os.Stdout
 		err := blockCmd.Start()
@@ -153,6 +153,9 @@ func SameOperation(op1, op2 *surfstore.UpdateOperation) bool {
 	if op1.FileMetaData == nil && op2.FileMetaData != nil ||
 		op1.FileMetaData != nil && op2.FileMetaData == nil {
 		return false
+	}
+	if op1.FileMetaData == nil && op2.FileMetaData == nil {
+		return true
 	}
 	if op1.FileMetaData.Version != op2.FileMetaData.Version {
 		return false

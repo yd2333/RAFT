@@ -262,7 +262,7 @@ func SameMeta(meta1, meta2 map[string]*surfstore.FileMetaData) bool {
 func InitSurfServers(blockStores int) []*exec.Cmd {
 	cmdList := make([]*exec.Cmd, 0)
 	if blockStores == 0 {
-		serverCmd := exec.Command("_bin/SurfstoreServerExec", "-s", "both", "-l", "localhost:8080")
+		serverCmd := exec.Command("_bin/SurfstoreServerExec", "-b", "-s", "both", "-l", "localhost:8080")
 		serverCmd.Stderr = os.Stderr
 		serverCmd.Stdout = os.Stdout
 		cmdList = append(cmdList, serverCmd)
@@ -270,7 +270,7 @@ func InitSurfServers(blockStores int) []*exec.Cmd {
 		metaArgs := []string{"-s", "meta", "-l"}
 		for i := 1; i <= blockStores; i++ {
 			port := 8080 + i
-			blockCmd := exec.Command("_bin/SurfstoreServerExec", "-s", "block", "-p", strconv.Itoa(port), "-l")
+			blockCmd := exec.Command("_bin/SurfstoreServerExec", "-b", "-s", "block", "-p", strconv.Itoa(port), "-l")
 			blockCmd.Stderr = os.Stderr
 			blockCmd.Stdout = os.Stdout
 			cmdList = append(cmdList, blockCmd)

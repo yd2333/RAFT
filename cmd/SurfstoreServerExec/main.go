@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cse224/proj5/pkg/surfstore"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 // Usage String
@@ -40,12 +42,17 @@ func main() {
 	debug := flag.Bool("d", false, "Output log statements")
 	flag.Parse()
 
+	// TODO: change your code in cmd/SurfstoreServerExec/main.go to handle multiple tail aruguments.
+	// In previous project, we only have one tail argument indicating the single block server's address.
+	// Now we want to handle multiple arguments to configure multiple block servers.
+
 	// Use tail arguments to hold BlockStore address
 	args := flag.Args()
-	blockStoreAddrs := []string{}
-	if len(args) >= 1 {
-		blockStoreAddrs = args
-	}
+	// blockStoreAddr := ""
+	blockStoreAddr := args
+	// if len(args) == 1 {
+	// 	blockStoreAddr = args[0]
+	// }
 
 	// Valid service type argument
 	if _, ok := SERVICE_TYPES[strings.ToLower(*service)]; !ok {
@@ -66,25 +73,49 @@ func main() {
 		log.SetOutput(io.Discard)
 	}
 
-	log.Fatal(startServer(addr, strings.ToLower(*service), blockStoreAddrs))
+	log.Fatal(startServer(addr, strings.ToLower(*service), blockStoreAddr))
 }
 
 func startServer(hostAddr string, serviceType string, blockStoreAddrs []string) error {
-	// Create a new Server
-	grpcServer := grpc.NewServer()
+	// Create a new gRPC server
+	server := grpc.NewServer()
 
-	// Register rpc services
-	if serviceType != "block" {
-		panic("todo")
+	// Register services based on the serviceType
+	switch serviceType {
+	case "both":
+		// Register MetaStore service
+		metaStore := surfstore.NewMetaStore(blockStoreAddrs)
+		surfstore.RegisterMetaStoreServer(server, metaStore)
+		// Register BlockStore service
+		blockStore := surfstore.NewBlockStore()
+		surfstore.RegisterBlockStoreServer(server, blockStore)
+
+	case "meta":
+		// Register MetaStore service only
+		metaStore := surfstore.NewMetaStore(blockStoreAddrs)
+		surfstore.RegisterMetaStoreServer(server, metaStore)
+
+	case "block":
+		// Register BlockStore service only
+		blockStore := surfstore.NewBlockStore()
+		surfstore.RegisterBlockStoreServer(server, blockStore)
+
+	default:
+		return fmt.Errorf("invalid service type: %s", serviceType)
 	}
 
-	if serviceType != "meta" {
-		panic("todo")
+	// Enable reflection for the gRPC server
+	reflection.Register(server)
+
+	// Start listening on the specified host address
+	lis, err := net.Listen("tcp", hostAddr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %v", hostAddr, err)
 	}
 
-	l, e := net.Listen("tcp", hostAddr)
-	if e != nil {
-		return e
+	// fmt.Printf("Starting gRPC server on %s with service type: %s", hostAddr, serviceType)
+	if err := server.Serve(lis); err != nil {
+		return fmt.Errorf("failed to serve gRPC server: %v", err)
 	}
-	return grpcServer.Serve(l)
+	return nil
 }
