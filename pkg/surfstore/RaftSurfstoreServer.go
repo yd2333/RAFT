@@ -38,17 +38,20 @@ type RaftSurfstore struct {
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
 	// Ensure that the majority of servers are up
+	s.sendPersistentHeartbeats(ctx, int64(0))
 	return s.metaStore.GetFileInfoMap(ctx, empty)
 }
 
 func (s *RaftSurfstore) GetBlockStoreMap(ctx context.Context, hashes *BlockHashes) (*BlockStoreMap, error) {
 	// Ensure that the majority of servers are up
+	s.sendPersistentHeartbeats(ctx, int64(0))
 	return s.metaStore.GetBlockStoreMap(ctx, hashes)
 
 }
 
 func (s *RaftSurfstore) GetBlockStoreAddrs(ctx context.Context, empty *emptypb.Empty) (*BlockStoreAddrs, error) {
 	// Ensure that the majority of servers are up
+	s.sendPersistentHeartbeats(ctx, int64(0))
 	return s.metaStore.GetBlockStoreAddrs(ctx, empty)
 
 }
@@ -89,6 +92,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	s.raftStateMutex.Lock()
 	s.commitIndex += 1
 	s.raftStateMutex.Unlock()
+	s.lastApplied += 1
 	if filemeta == nil {
 		return nil, nil
 	}
@@ -154,7 +158,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	// follow it
 	for i, entry := range input.Entries {
 		logIndex := input.PrevLogIndex + 1 + int64(i)
-		fmt.Println("appendentries case 3: logIndex", logIndex, "input.PrevLogIndex", input.PrevLogIndex)
+		// fmt.Println("appendentries case 3: logIndex", logIndex, "input.PrevLogIndex", input.PrevLogIndex)
 		if logIndex < int64(len(s.log)) && s.log[logIndex].Term != entry.Term {
 			s.log = s.log[:logIndex] // equivalent to deleting all the following
 			break
@@ -180,20 +184,20 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	// s.commitIndex = input.LeaderCommit
 
 	// Apply to local state machine
-	if peerId == 1 {
-		fmt.Println("appendEntries log:", s.log, "s.lastApplied", s.lastApplied, "input.LeaderCommit", input.LeaderCommit)
-	}
+	// if peerId == 1 {
+	// 	fmt.Println("appendEntries log:", s.log, "s.lastApplied", s.lastApplied, "input.LeaderCommit", input.LeaderCommit)
+	// }
 	s.raftStateMutex.Lock()
 	for s.lastApplied < input.LeaderCommit {
 		entry := s.log[s.lastApplied+1]
 		// fmt.Println("appendEntries ")
 		if entry.FileMetaData == nil {
-			fmt.Println("Nil File Meta")
+			// fmt.Println("Nil File Meta")
 			s.lastApplied += 1
 			continue
 		}
 		// fmt.Println("appendEntries: server", s.id, "updating ", entry.FileMetaData.Filename, entry.FileMetaData.Version)
-		fmt.Println("AppendEntries: non nil meta", entry.FileMetaData)
+		fmt.Println("AppendEntries: non nil meta", peerId, entry.FileMetaData)
 		_, err := s.metaStore.UpdateFile(ctx, entry.FileMetaData)
 		if err != nil {
 			s.raftStateMutex.Unlock()

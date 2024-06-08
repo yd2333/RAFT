@@ -111,7 +111,7 @@ func (s *RaftSurfstore) checkStatus() error {
 }
 
 func (s *RaftSurfstore) sendPersistentHeartbeats(ctx context.Context, reqId int64) {
-	fmt.Println("sendPersistentHeartbeats: nextId of", s.id, s.nextId)
+	// fmt.Println("sendPersistentHeartbeats: nextId of", s.id, s.nextId)
 	numServers := len(s.peers)
 	peerResponses := make(chan bool, numServers-1)
 
@@ -144,7 +144,7 @@ func (s *RaftSurfstore) sendPersistentHeartbeats(ctx context.Context, reqId int6
 		s.raftStateMutex.RUnlock()
 
 		if reqId >= 0 && reqId < requestLen {
-			fmt.Println("sendPersistent reqId:", reqId, "requestLen", requestLen)
+			// fmt.Println("sendPersistent reqId:", reqId, "requestLen", requestLen)
 			s.raftStateMutex.Lock()
 			*s.pendingRequests[reqId] <- PendingRequest{success: true, err: nil}
 			s.pendingRequests = append(s.pendingRequests[:reqId], s.pendingRequests[reqId+1:]...)
@@ -178,7 +178,7 @@ func (s *RaftSurfstore) sendToFollower(ctx context.Context,
 		// PrintAppendEntriesInput(&appendEntriesInput)
 		s.raftStateMutex.RUnlock()
 
-		fmt.Println("sendToFollower:", peerId, "calling appendEntries")
+		// fmt.Println("sendToFollower:", peerId, "calling appendEntries")
 		time.Sleep(750 * time.Millisecond)
 		reply, err := client.AppendEntries(ctx, &appendEntriesInput)
 		// time.Sleep(250 * time.Millisecond)

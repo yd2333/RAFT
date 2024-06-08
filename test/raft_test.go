@@ -129,3 +129,85 @@ func TestRaftFollowersGetUpdates(t *testing.T) {
 		}
 	}
 }
+
+func TestRaftLogsConsistentLeaderCrashesBeforeHeartbeat(t *testing.T) {
+	/*raft_test.go:525:
+	leader1 gets a request while a minority of the cluster is down.
+	leader1 crashes before sending a heartbeat.
+	the other crashed nodes are restored.
+	leader2 gets a request.
+	leader1 is restored.
+	*/
+	//Setup
+	cfgPath := "./config_files/3nodes.txt"
+	test := InitTest(cfgPath)
+	defer EndTest(test)
+	// 1st crash
+	crashedIdx := 1
+	test.Clients[crashedIdx].Crash(test.Context, &emptypb.Empty{})
+	// TEST
+	leader1 := 0 // leader 1
+	test.Clients[leader1].SetLeader(test.Context, &emptypb.Empty{})
+	test.Clients[leader1].SendHeartbeat(test.Context, &emptypb.Empty{})
+
+	filemeta1 := &surfstore.FileMetaData{
+		Filename:      "testFile1",
+		Version:       1,
+		BlockHashList: nil,
+	}
+
+	filemeta2 := &surfstore.FileMetaData{
+		Filename:      "testFile2",
+		Version:       1,
+		BlockHashList: nil,
+	}
+
+	// update
+	test.Clients[leader1].UpdateFile(test.Context, filemeta1)
+	// leader crash before sending heart beat  & restore 1st crashed
+	test.Clients[leader1].Crash(test.Context, &emptypb.Empty{})
+	test.Clients[crashedIdx].Restore(test.Context, &emptypb.Empty{})
+
+	leader2 := 2
+	test.Clients[leader2].SetLeader(test.Context, &emptypb.Empty{})
+	test.Clients[leader2].SendHeartbeat(test.Context, &emptypb.Empty{})
+	test.Clients[leader2].UpdateFile(test.Context, filemeta2)
+	test.Clients[leader2].SendHeartbeat(test.Context, &emptypb.Empty{})
+	test.Clients[leader1].Restore(test.Context, &emptypb.Empty{})
+
+	goldenMeta := make(map[string]*surfstore.FileMetaData)
+	goldenMeta[filemeta1.Filename] = filemeta1
+	goldenMeta[filemeta2.Filename] = filemeta2
+
+	goldenLog := make([]*surfstore.UpdateOperation, 0)
+	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
+		Term:         1,
+		FileMetaData: nil,
+	})
+	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
+		Term:         1,
+		FileMetaData: filemeta1,
+	})
+	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
+		Term:         2,
+		FileMetaData: nil,
+	})
+	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
+		Term:         2,
+		FileMetaData: filemeta2,
+	})
+	var leader bool
+	term := int64(2)
+
+	for idx, server := range test.Clients {
+		if idx == leader2 {
+			leader = bool(true)
+		} else {
+			leader = bool(false)
+		}
+		_, err := CheckInternalState(&leader, &term, goldenLog, goldenMeta, server, test.Context)
+		if err != nil {
+			t.Fatalf("Error checking state for server %d: %s", idx, err.Error())
+		}
+	}
+}
