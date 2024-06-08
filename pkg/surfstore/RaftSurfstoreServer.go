@@ -122,16 +122,15 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	peerTerm := s.term
 	peerId := s.id
 	s.raftStateMutex.RUnlock()
-	if peerId == 1 {
-		fmt.Println("Appendentries: id", peerId)
-		PrintAppendEntriesInput(input)
-	}
+	// if peerId != 10 {
+	// 	fmt.Println("Appendentries: id", peerId)
+	// 	PrintAppendEntriesInput(input)
+	// }
 	// prepare appendEntryOutput according to different cases
 	// Case 1: Stepping down
 	output := AppendEntryOutput{}
 	// step down: outdated
 	if peerTerm < input.Term {
-		// fmt.Println("Appendentries: id", peerId, " stepping down")
 		s.serverStatusMutex.Lock()
 		s.serverStatus = ServerStatus_FOLLOWER
 		s.serverStatusMutex.Unlock()
@@ -140,10 +139,11 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		s.term = input.Term
 		s.raftStateMutex.Unlock()
 		peerTerm = input.Term
+		// fmt.Println("Appendentries: id", peerId, " stepping down")
 		return &AppendEntryOutput{
 			Term:         peerTerm,
 			ServerId:     peerId,
-			Success:      false,
+			Success:      true,
 			MatchedIndex: -1,
 		}, nil
 	}

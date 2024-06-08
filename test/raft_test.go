@@ -211,3 +211,72 @@ func TestRaftLogsConsistentLeaderCrashesBeforeHeartbeat(t *testing.T) {
 		}
 	}
 }
+
+func TestRaftSetLeader5Nodes(t *testing.T) {
+	//Setup
+	cfgPath := "./config_files/5nodes.txt"
+	test := InitTest(cfgPath)
+	defer EndTest(test)
+
+	// TEST
+	leaderIdx := 0
+	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
+
+	// heartbeat
+	for _, server := range test.Clients {
+		server.SendHeartbeat(test.Context, &emptypb.Empty{})
+	}
+
+	for idx, server := range test.Clients {
+		// all should have the leaders term
+		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
+		if state == nil {
+			t.Fatalf("Could not get state")
+		}
+		if state.Term != int64(1) {
+			t.Fatalf("Server %d should be in term %d but now %d", idx, 1, state.Term)
+		}
+		if idx == leaderIdx {
+			// server should be the leader
+			if state.Status != surfstore.ServerStatus_LEADER {
+				t.Fatalf("Server %d should be the leader", idx)
+			}
+		} else {
+			// server should not be the leader
+			if state.Status == surfstore.ServerStatus_LEADER {
+				t.Fatalf("Server %d should not be the leader", idx)
+			}
+		}
+	}
+	fmt.Println("TEST: CHANGE LEADER TO 2!!!!!")
+
+	leaderIdx = 2
+	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
+
+	// heartbeat
+	for _, server := range test.Clients {
+		server.SendHeartbeat(test.Context, &emptypb.Empty{})
+	}
+
+	for idx, server := range test.Clients {
+		// all should have the leaders term
+		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
+		if state == nil {
+			t.Fatalf("Could not get state")
+		}
+		if state.Term != int64(2) {
+			t.Fatalf("Server should be in term %d", 2)
+		}
+		if idx == leaderIdx {
+			// server should be the leader
+			if state.Status != surfstore.ServerStatus_LEADER {
+				t.Fatalf("Server %d should be the leader", idx)
+			}
+		} else {
+			// server should not be the leader
+			if state.Status == surfstore.ServerStatus_LEADER {
+				t.Fatalf("Server %d should not be the leader", idx)
+			}
+		}
+	}
+}

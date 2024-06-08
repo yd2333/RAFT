@@ -131,6 +131,7 @@ func (s *RaftSurfstore) sendPersistentHeartbeats(ctx context.Context, reqId int6
 	totalResponses := 1
 	numAliveServers := 1
 	for totalResponses < numServers {
+		fmt.Println(totalResponses, numServers)
 		response := <-peerResponses
 		totalResponses += 1
 		if response {
@@ -184,21 +185,25 @@ func (s *RaftSurfstore) sendToFollower(ctx context.Context,
 		// time.Sleep(250 * time.Millisecond)
 
 		if err != nil {
-			fmt.Println("sendToFollower:Appendentries to", peerId, err)
 			peerResponses <- false
 			return
 		}
 		// PrintAppendEntriesOutput(reply)
 		success = reply.Success
 		// case 1: success updates
+		s.raftStateMutex.RLock()
 		if success {
 			s.lastApplied = reply.MatchedIndex
 			s.nextId[peerId] = reply.MatchedIndex + 1
+			// fmt.Println("sendToFollower,", peerId)
 			peerResponses <- true
+			s.raftStateMutex.RUnlock()
+			fmt.Println("sendToFollower:Appendentries to", peerId)
 			return
 		}
-
+		fmt.Println("sendToFollower:Appendentries to fail", peerId)
 		peerResponses <- false
+		s.raftStateMutex.RUnlock()
 		return
 		// case 2: if term conflict, then step down, break and return fail
 		// if reply.Term != appendEntriesInput.Term {
