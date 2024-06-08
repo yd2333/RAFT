@@ -172,8 +172,8 @@ func TestRaftLogsConsistentLeaderCrashesBeforeHeartbeat(t *testing.T) {
 	test.Clients[leader2].SetLeader(test.Context, &emptypb.Empty{})
 	test.Clients[leader2].SendHeartbeat(test.Context, &emptypb.Empty{})
 	test.Clients[leader2].UpdateFile(test.Context, filemeta2)
-	test.Clients[leader2].SendHeartbeat(test.Context, &emptypb.Empty{})
 	test.Clients[leader1].Restore(test.Context, &emptypb.Empty{})
+	test.Clients[leader2].SendHeartbeat(test.Context, &emptypb.Empty{})
 
 	goldenMeta := make(map[string]*surfstore.FileMetaData)
 	goldenMeta[filemeta1.Filename] = filemeta1

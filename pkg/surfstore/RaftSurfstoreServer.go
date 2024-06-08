@@ -64,6 +64,14 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	if err := s.checkStatus(); err != nil {
 		return nil, err
 	}
+
+	// Commit the preceding
+	for s.lastApplied < int64(len(s.log)-1) {
+		filemeta := s.log[s.lastApplied+1].FileMetaData
+		s.metaStore.UpdateFile(ctx, filemeta)
+		s.lastApplied += 1
+		s.commitIndex = s.lastApplied
+	}
 	// add client request to log, pending request
 	pendingReq := make(chan PendingRequest)
 	s.raftStateMutex.Lock()
@@ -185,10 +193,11 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	// Apply to local state machine
 	// if peerId == 1 {
-	// 	fmt.Println("appendEntries log:", s.log, "s.lastApplied", s.lastApplied, "input.LeaderCommit", input.LeaderCommit)
+	fmt.Println("appendEntries log:", s.log, "s.lastApplied", s.lastApplied, "input.LeaderCommit", input.LeaderCommit)
 	// }
 	s.raftStateMutex.Lock()
 	for s.lastApplied < input.LeaderCommit {
+		fmt.Println("appendEntries, s.lastApplied+1", s.lastApplied+1, peerId)
 		entry := s.log[s.lastApplied+1]
 		// fmt.Println("appendEntries ")
 		if entry.FileMetaData == nil {
@@ -198,11 +207,12 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		}
 		// fmt.Println("appendEntries: server", s.id, "updating ", entry.FileMetaData.Filename, entry.FileMetaData.Version)
 		fmt.Println("AppendEntries: non nil meta", peerId, entry.FileMetaData)
-		_, err := s.metaStore.UpdateFile(ctx, entry.FileMetaData)
-		if err != nil {
-			s.raftStateMutex.Unlock()
-			return nil, err
-		}
+		s.metaStore.UpdateFile(ctx, entry.FileMetaData)
+		// _, err := s.metaStore.UpdateFile(ctx, entry.FileMetaData)
+		// if err != nil {
+		// 	s.raftStateMutex.Unlock()
+		// 	return nil, err
+		// }
 		s.lastApplied += 1
 	}
 
