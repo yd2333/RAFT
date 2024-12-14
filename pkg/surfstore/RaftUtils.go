@@ -112,6 +112,7 @@ func (s *RaftSurfstore) checkStatus() error {
 
 func (s *RaftSurfstore) sendPersistentHeartbeats(ctx context.Context, reqId int64) {
 	// fmt.Println("sendPersistentHeartbeats: nextId of", s.id, s.nextId)
+	// fmt.Println("sendPersistentHeartbeats: unreachabel", s.unreachableFrom)
 	numServers := len(s.peers)
 	peerResponses := make(chan bool, numServers-1)
 
@@ -131,15 +132,18 @@ func (s *RaftSurfstore) sendPersistentHeartbeats(ctx context.Context, reqId int6
 	totalResponses := 1
 	numAliveServers := 1
 	for totalResponses < numServers {
-		fmt.Println(totalResponses, numServers)
+		// fmt.Println(totalResponses, numServers)
 		response := <-peerResponses
 		totalResponses += 1
 		if response {
+
 			numAliveServers += 1
 		}
 	}
+	// fmt.Println("sendpersistent: done channle")
 
 	if numAliveServers > numServers/2 {
+		fmt.Println("sendpersistentHB: majority")
 		s.raftStateMutex.RLock()
 		requestLen := int64(len(s.pendingRequests))
 		s.raftStateMutex.RUnlock()
@@ -161,6 +165,19 @@ func (s *RaftSurfstore) sendToFollower(ctx context.Context,
 	// time.Sleep(10 * time.Millisecond)
 	// fmt.Println("sendToFollower sleep done", peerId)
 	client := NewRaftSurfstoreClient(s.rpcConns[peerId])
+	// for id, unreachable := range s.unreachableFrom {
+	// 	if id == peerId && unreachable {
+	// 		fmt.Println(id, unreachable)
+	// 		peerResponses <- false
+	// 		fmt.Println("sendToFollower: unreachable", peerId)
+	// 		return
+	// 	}
+	// }
+	// if s.unreachableFrom[peerId] {
+	// 	fmt.Println("sendToFollower: unreachable", peerId)
+	// 	peerResponses <- false
+	// 	return
+	// }
 
 	// while until success
 	success := false
@@ -198,10 +215,10 @@ func (s *RaftSurfstore) sendToFollower(ctx context.Context,
 			// fmt.Println("sendToFollower,", peerId)
 			peerResponses <- true
 			s.raftStateMutex.RUnlock()
-			fmt.Println("sendToFollower:Appendentries to", peerId)
+			// fmt.Println("sendToFollower:Appendentries to", peerId)
 			return
 		}
-		fmt.Println("sendToFollower:Appendentries to fail", peerId)
+		// fmt.Println("sendToFollower:Appendentries to fail", peerId)
 		peerResponses <- false
 		s.raftStateMutex.RUnlock()
 		return

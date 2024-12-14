@@ -68,6 +68,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	// Commit the preceding
 	for s.lastApplied < int64(len(s.log)-1) {
 		filemeta := s.log[s.lastApplied+1].FileMetaData
+		fmt.Println("updatedile: ", filemeta.Filename, s.lastApplied, int64(len(s.log)-1))
 		s.metaStore.UpdateFile(ctx, filemeta)
 		s.lastApplied += 1
 		s.commitIndex = s.lastApplied
@@ -81,7 +82,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	}
 	s.log = append(s.log, &entry)
 	s.pendingRequests = append(s.pendingRequests, &pendingReq)
-	fmt.Println("updateFile: server ", s.id, "log", s.log)
+	// fmt.Println("updateFile: server ", s.id, "log", s.log)
 
 	//TODO: Think whether it should be last or first request
 	// last
@@ -104,7 +105,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	if filemeta == nil {
 		return nil, nil
 	}
-	fmt.Println("Update Done")
+	// fmt.Println("Update Done")
 	return s.metaStore.UpdateFile(ctx, filemeta)
 }
 
@@ -118,10 +119,23 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 // of last new entry)
 func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInput) (*AppendEntryOutput, error) {
 	// Preparation
+	for s.unreachableFrom[input.LeaderId] {
+		continue
+	}
 	s.raftStateMutex.RLock()
 	peerTerm := s.term
 	peerId := s.id
+	// if s.unreachableFrom[input.LeaderId] {
+	// 	s.raftStateMutex.RUnlock()
+	// 	return &AppendEntryOutput{
+	// 		Term:         -1,
+	// 		ServerId:     -1,
+	// 		Success:      false,
+	// 		MatchedIndex: -1,
+	// 	}, nil
+	// }
 	s.raftStateMutex.RUnlock()
+
 	// if peerId != 10 {
 	// 	fmt.Println("Appendentries: id", peerId)
 	// 	PrintAppendEntriesInput(input)
@@ -138,14 +152,18 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		s.raftStateMutex.Lock()
 		s.term = input.Term
 		s.raftStateMutex.Unlock()
-		peerTerm = input.Term
-		// fmt.Println("Appendentries: id", peerId, " stepping down")
-		return &AppendEntryOutput{
-			Term:         peerTerm,
-			ServerId:     peerId,
-			Success:      true,
-			MatchedIndex: -1,
-		}, nil
+		// peerTerm = input.Term
+		if peerId == 0 {
+
+			fmt.Println("Appendentries: id", peerId, " stepping down")
+		}
+		// return &AppendEntryOutput{
+		// 	Term:         peerTerm,
+		// 	ServerId:     peerId,
+		// 	Success:      true,
+		// 	MatchedIndex: -1,
+		// }, nil
+
 	}
 	// Case 2: Reply false if log doesn’t contain an entry at prevLogIndex
 	// or whose term matches prevLogTerm
@@ -193,11 +211,11 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	// Apply to local state machine
 	// if peerId == 1 {
-	fmt.Println("appendEntries log:", s.log, "s.lastApplied", s.lastApplied, "input.LeaderCommit", input.LeaderCommit)
+	// fmt.Println("appendEntries log:", s.log, "s.lastApplied", s.lastApplied, "input.LeaderCommit", input.LeaderCommit)
 	// }
 	s.raftStateMutex.Lock()
 	for s.lastApplied < input.LeaderCommit {
-		fmt.Println("appendEntries, s.lastApplied+1", s.lastApplied+1, peerId)
+		fmt.Println("appendEntries,", peerId, "s.lastApplied+1", s.lastApplied+1, " len(s.log)", len(s.log), "leadercomm", input.LeaderCommit)
 		entry := s.log[s.lastApplied+1]
 		// fmt.Println("appendEntries ")
 		if entry.FileMetaData == nil {
@@ -206,7 +224,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 			continue
 		}
 		// fmt.Println("appendEntries: server", s.id, "updating ", entry.FileMetaData.Filename, entry.FileMetaData.Version)
-		fmt.Println("AppendEntries: non nil meta", peerId, entry.FileMetaData)
+		// fmt.Println("AppendEntries: non nil meta", peerId, entry.FileMetaData)
 		s.metaStore.UpdateFile(ctx, entry.FileMetaData)
 		// _, err := s.metaStore.UpdateFile(ctx, entry.FileMetaData)
 		// if err != nil {
@@ -239,7 +257,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 
 	s.serverStatusMutex.Lock()
 	s.serverStatus = ServerStatus_LEADER
-	log.Printf("Server %d has been set as a leader", s.id)
+	// log.Printf("Server %d has been set as a leader", s.id)
 	s.serverStatusMutex.Unlock()
 
 	s.raftStateMutex.Lock()
